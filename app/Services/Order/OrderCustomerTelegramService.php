@@ -35,7 +35,7 @@ class OrderCustomerTelegramService
     $message .= OrderMessageBody::makeMessage($this->order);
 
     $this->chat()
-      ->html($message)
+      ?->html($message)
       ->send();
   }
 
@@ -50,7 +50,7 @@ class OrderCustomerTelegramService
     $message .= OrderMessageBody::makeMessage($this->order);
 
     $this->chat()
-      ->html($message)
+      ?->html($message)
       ->send();
   }
 
@@ -74,7 +74,7 @@ class OrderCustomerTelegramService
     $message .= OrderMessageBody::makeMessage($this->order);
 
     $this->chat()
-      ->html($message)
+      ?->html($message)
       ->send();
   }
 
@@ -91,7 +91,7 @@ class OrderCustomerTelegramService
     $message .= OrderMessageBody::makeMessage($this->order);
 
     $this->chat()
-      ->html($message)
+      ?->html($message)
       ->send();
   }
   // Submitted Order Msg
@@ -105,7 +105,7 @@ class OrderCustomerTelegramService
     $message .= OrderMessageBody::makeMessage($this->order);
 
     $this->chat()
-      ->html($message)
+      ?->html($message)
       ->send();
   }
 
