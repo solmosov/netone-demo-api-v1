@@ -148,7 +148,7 @@ class OrderService
             ];
         } catch (\Exception $e) {
             DB::rollBack();
-            throw new ServerErrorException($e->getMessage(), $e->getCode(), $e);
+            throw new ServerErrorException($e->getMessage(), (int)$e->getCode(), $e);
         }
     }
 
@@ -333,8 +333,7 @@ class OrderService
                 if ($stockItem->amount < $completedAmount) {
                     throw new InvalidDataException("$stockItem->name zaxira polkada zaxira yetarli emas");
                 }
-                // Set Polka
-                // $orderItem->polka_id = 
+                
 
                 // Product Price
                 $salePrice = $orderItem->sale_price;
@@ -346,6 +345,7 @@ class OrderService
 
                 // Set Completed Amount
                 $orderItem->completed_amount = $completedAmount;
+                $orderItem->stock_id = $stockId;
                 $orderItem->save();
 
                 // Decrement form stock
@@ -355,7 +355,6 @@ class OrderService
                 $totalSale += $sumSalePrice;
                 $totalCost += $sumCostPrice;
             }
-
             // Set Totals
             $newCompletedOrder->total_sale_price = $totalSale;
             $newCompletedOrder->total_cost_price = $totalCost;

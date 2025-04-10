@@ -15,7 +15,6 @@ return new class extends Migration {
             $table->foreignId('order_id')->constrained('orders')->cascadeOnDelete();
             $table->foreignId('product_id')->constrained('products');
             $table->foreignId('amount_type_id')->constrained('amount_types');
-            $table->foreignId('stock_id')->constrained('product_stocks');
             $table->decimal('amount');
             $table->decimal('completed_amount')->default(0);
             $table->decimal('sale_price', 12, 2);
