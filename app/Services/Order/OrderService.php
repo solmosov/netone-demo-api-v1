@@ -333,7 +333,7 @@ class OrderService
                 if ($stockItem->amount < $completedAmount) {
                     throw new InvalidDataException("$stockItem->name zaxira polkada zaxira yetarli emas");
                 }
-                
+
 
                 // Product Price
                 $salePrice = $orderItem->sale_price;
@@ -358,6 +358,7 @@ class OrderService
             // Set Totals
             $newCompletedOrder->total_sale_price = $totalSale;
             $newCompletedOrder->total_cost_price = $totalCost;
+            $newCompletedOrder->save();
 
             $currentOrder->status_id = $statusCompleted->id;
             $currentOrder->save();
