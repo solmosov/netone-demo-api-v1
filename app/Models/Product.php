@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Product extends Model
@@ -25,5 +26,10 @@ class Product extends Model
     public function stock(): HasOne
     {
         return $this->hasOne(ProductStock::class, 'product_id');
+    }
+
+    public function stocks(): HasMany
+    {
+        return $this->hasMany(ProductStock::class, 'product_id');
     }
 }

@@ -24,6 +24,7 @@ class UpdateOrderCompletedRequest extends FormRequest
         return [
             'items_list' => 'required|array',
             'items_list.*.item_id' => 'required|integer|exists:order_details,id',
+            'items_list.*.stock_id' => 'required|integer|exists:product_stocks,id',
             'items_list.*.completed_amount' => 'required|numeric|min:0',
             'comment' => 'nullable|string|min:6|max:255',
         ];
