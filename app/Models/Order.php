@@ -33,7 +33,7 @@ class Order extends Model
 
     public function orderDetails(): HasMany
     {
-        return $this->hasMany(OrderDetail::class, 'order_id')->with(['product', 'amountType']);
+        return $this->hasMany(OrderDetail::class, 'order_id')->with(['product.stocks', 'amountType']);
     }
 
     public function status(): BelongsTo

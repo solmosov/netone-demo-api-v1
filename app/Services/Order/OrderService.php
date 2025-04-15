@@ -19,6 +19,7 @@ use App\Models\ProductStock;
 use App\Services\GenerateOrderCode;
 use App\Services\Status\StatusService;
 use App\Services\Utils\DateFormatter;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class OrderService
@@ -54,8 +55,8 @@ class OrderService
             $query->where('status_id', $status->id);
         }
 
-        if (!auth()->user()->isAdmin()) {
-            $query->where('user_id', auth()->id());
+        if (!Auth::user()->isAdmin()) {
+            $query->where('user_id', Auth::id());
         }
 
         $data = $query
@@ -95,7 +96,7 @@ class OrderService
 
         try {
             $newOrder = Order::create([
-                "user_id" => auth()->id(),
+                "user_id" => Auth::id(),
                 "customer_id" => $data['customer_id'],
                 "status_id" => $newOrderStatus->id,
                 'total_cost_price' => 0,
@@ -147,7 +148,7 @@ class OrderService
             ];
         } catch (\Exception $e) {
             DB::rollBack();
-            throw new ServerErrorException($e->getMessage(), $e->getCode(), $e);
+            throw new ServerErrorException($e->getMessage(), (int)$e->getCode(), $e);
         }
     }
 
@@ -162,8 +163,8 @@ class OrderService
             'completedOrder'
         )->where('id', $id);
 
-        if (!auth()->user()->isAdmin()) {
-            $query->where('user_id', auth()->id());
+        if (!Auth::user()->isAdmin()) {
+            $query->where('user_id', Auth::id());
         }
 
         $order = $query->firstOrFail();
@@ -177,7 +178,7 @@ class OrderService
     {
         $newOrderStatus = StatusService::findByCode('orderNew');
 
-        $order = Order::where('user_id', auth()->id())
+        $order = Order::where('user_id', Auth::id())
             ->where('status_id', $newOrderStatus->id)
             ->findOrFail($id);
 
@@ -216,7 +217,7 @@ class OrderService
         $statusOrderInProgress = StatusService::findByCode('orderInProgress');
 
         // Order
-        $order = Order::where('user_id', auth()->id())
+        $order = Order::where('user_id', Auth::id())
             ->where('status_id', $statusOrderInProgress->id)
             ->findOrFail($id);
 
@@ -272,135 +273,101 @@ class OrderService
      * @throws InvalidDataException
      * @throws ServerErrorException
      */
-    public function completed(array $data, int $id): array
+    public function completed(array $data, int $id)
     {
-        $itemsList = $data['items_list'];
-        $comment = $data['comment'] ?? null;
+        // Req Data
+        $reqItemsList = $data['items_list'];
+        $reqComment = $data['comment'] ?? null;
+        $reqOrderId = $id;
 
-        $pluckItemsList = [];
-        foreach ($itemsList as $item) {
-            $pluckItemsList[$item['item_id']] = $item['completed_amount'];
-        }
+        // Auth User
+        $authUserId = Auth::id();
 
         // Status
+        $statusCompleted = StatusService::findByCode('orderCompleted');
         $orderNewStatus = StatusService::findByCode('orderNew');
         $orderInProgressStatus = StatusService::findByCode('orderInProgress');
-
         // Order
-        $order = Order::with('orderDetails')
-            ->whereIn('status_id', [$orderNewStatus->id, $orderInProgressStatus->id])
-            ->findOrFail($id);
+        $currentOrder = Order::whereIn('status_id', [$orderNewStatus->id, $orderInProgressStatus->id])->findOrFail($id);
 
-        /************* */
-
-        // Length
-        $orderItemLength = $order->orderDetails->count();
-        $prodItemLength = count($pluckItemsList);
-
-        if ($orderItemLength !== $prodItemLength) {
-            throw new InvalidDataException("Siz buyurtma mahsulotlarni noto'g'ri kiritmoqdasiz, iltimos etiborli bo'ling.");
-        }
-
-        foreach ($order->orderDetails as $item) {
-            if (!isset($pluckItemsList[$item->id])) {
-                throw new InvalidDataException("Siz buyurtma mahsulotlarni not'g'ri kiritmoqdasiz, iltimos etiborli bo'ling.");
-            }
-        }
-
-        // Plucked Order Details Products ID
-        $pluckProductsIdList = $order->orderDetails->pluck('product_id')->toArray();
-
-        // Validate Product Stock
-        $stockList = ProductStock::with('product')
-            ->whereIn('product_id', $pluckProductsIdList)
-            ->get();
-
-        if ($stockList->isEmpty()) {
-            throw new InvalidDataException("Buyurtmani tayyorlab bo'lmadi. Zaxirani tekshiring!");
-        }
-
-        // Products
-        $productPluckList = Product::whereIn('id', $pluckProductsIdList)
-            ->select('id', 'name')
-            ->get()
-            ->pluck('name', 'id');
-
-        // Stock Amount Pluck List
-        $stockAmountPluckList = $stockList->pluck('amount', 'product_id');
-
-        foreach ($order->orderDetails as $item) {
-            // Check Exists
-            if (!$stockAmountPluckList->has($item->product_id)) {
-                $productName = $productPluckList->get($item->product_id);
-                throw new InvalidDataException("`$productName` mahsuloti bo'yicha zaxira mavjud emas!");
-            }
-
-            $completedAmount = $pluckItemsList[$item->id];
-            $stockAmount = $stockAmountPluckList->get($item->product_id);
-
-            // Check Amounts
-            if ($stockAmount < $completedAmount) {
-                $productName = $productPluckList->get($item->product_id);
-                throw new InvalidDataException("`$productName` mahsuloti bo'yicha zaxira yetarli emas!");
-            }
-        }
-
-        // Status Code
-        $statusCompleted = StatusService::findByCode('orderCompleted');
 
         DB::beginTransaction();
-
         try {
-            // Create New Completed Order
+            // New Completed Order
             $newCompletedOrder = CompletedOrder::create([
-                'user_id' => auth()->id(),
-                'order_id' => $order->id,
+                'user_id' => $authUserId,
+                'order_id' => $reqOrderId,
                 'status_id' => $statusCompleted->id,
-                'comment' => $comment,
+                'comment' => $reqComment,
                 'total_cost_price' => 0,
                 'total_sale_price' => 0,
                 'customer_old_balance' => 0,
             ]);
 
-            $totalCostPrice = 0;
-            $totalSalePrice = 0;
 
-            // Add Order Details completed amounts
-            foreach ($order->orderDetails as $detail) {
-                if (isset($pluckItemsList[$detail->id])) {
-                    // Completed Amount
-                    $completedAmount = $pluckItemsList[$detail->id];
+            // Totals
+            $totalSale = 0;
+            $totalCost = 0;
 
-                    // Calc Total Prices
-                    $totalCostPrice += $completedAmount * $detail->product->cost_price;
-                    $totalSalePrice += $completedAmount * $detail->product->sale_price;
+            // Add Completed Amount
+            foreach ($reqItemsList as $item) {
+                $orderItemId = $item['item_id'];
+                $stockId = $item['stock_id'];
+                $completedAmount = $item['completed_amount'];
 
+                // Order
+                $orderItem = OrderDetail::where('order_id', $reqOrderId)->findOrFail($orderItemId);
 
-                    // Update Order details item
-                    $detail->update(['completed_amount' => $completedAmount]);
+                // Stock
+                $stockItem = ProductStock::with('product')->findOrFail($stockId);
 
-                    // Change Stock
-                    $stock = ProductStock::where('product_id', $detail->product_id)->firstOrFail();
-                    $stock->decrement('amount', $completedAmount);
-                } else {
-                    throw new InvalidDataException("Siz buyurtma mahsulotlarni tanlang!");
+                // Validate
+                if ($orderItem->product_id != $stockItem->product_id) {
+                    throw new InvalidDataException("$stockItem->name zaxira polka, {$stockItem->product->name} mahsulotga tegishli emas");
                 }
-            }
 
-            // Change Total Price Of Completed Order
-            $newCompletedOrder->total_cost_price = $totalCostPrice;
-            $newCompletedOrder->total_sale_price = $totalSalePrice;
+                if ($orderItem->amount_type_id !== $stockItem->amount_type_id) {
+                    throw new InvalidDataException("$stockItem->name zaxira polka bilan buyurtma {$stockItem->product->name} mahsulot o'lchov birligi mos emas");
+                }
+
+                if ($stockItem->amount < $completedAmount) {
+                    throw new InvalidDataException("$stockItem->name zaxira polkada zaxira yetarli emas");
+                }
+
+
+                // Product Price
+                $salePrice = $orderItem->sale_price;
+                $costPrice = $orderItem->cost_price;
+
+                // Sum Price
+                $sumSalePrice = $salePrice * $completedAmount;
+                $sumCostPrice = $costPrice * $completedAmount;
+
+                // Set Completed Amount
+                $orderItem->completed_amount = $completedAmount;
+                $orderItem->stock_id = $stockId;
+                $orderItem->save();
+
+                // Decrement form stock
+                $stockItem->decrement('amount', $completedAmount);
+
+                // Totals
+                $totalSale += $sumSalePrice;
+                $totalCost += $sumCostPrice;
+            }
+            // Set Totals
+            $newCompletedOrder->total_sale_price = $totalSale;
+            $newCompletedOrder->total_cost_price = $totalCost;
             $newCompletedOrder->save();
 
-            // Change Order Status
-            $order->status_id = $statusCompleted->id;
-            $order->save();
+            $currentOrder->status_id = $statusCompleted->id;
+            $currentOrder->save();
 
             DB::commit();
 
             // Event
-            OrderCompletedEvent::dispatch($order);
-            
+            OrderCompletedEvent::dispatch($currentOrder);
+
             return [
                 'message' => "Buyurtma topshirishga tayyor, hozirgi holati tayyorlandi",
                 'data' => [
@@ -409,7 +376,7 @@ class OrderService
             ];
         } catch (\Exception $e) {
             DB::rollBack();
-            throw new ServerErrorException($e->getMessage(), $e->getCode(), $e);
+            throw new ServerErrorException($e->getMessage(), (int)$e->getCode(), $e);
         }
     }
 
@@ -458,7 +425,7 @@ class OrderService
 
             // Event
             OrderSubmittedEvent::dispatch($order);
-            
+
             return [
                 'message' => "Buyurtma muvaffaqiyatli topshirildi! Mijoz balansini tekshiring",
                 'data' => [
