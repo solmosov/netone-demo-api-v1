@@ -13,6 +13,7 @@ class OrderDetail extends Model
         'order_id',
         'product_id',
         'amount_type_id',
+        'stock_id',
         'completed_amount',
         'amount',
         'sale_price',
@@ -34,6 +35,11 @@ class OrderDetail extends Model
     public function amountType(): BelongsTo
     {
         return $this->belongsTo(AmountType::class, 'amount_type_id');
+    }
+
+    public function stock(): BelongsTo
+    {
+        return $this->belongsTo(ProductStock::class, 'stock_id');
     }
 
     public function status(): BelongsTo
