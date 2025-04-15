@@ -2,6 +2,7 @@
 
 namespace App\Services\Receive;
 
+use App\Exceptions\InvalidDataException;
 use App\Exceptions\ServerErrorException;
 use App\Models\Product;
 use App\Models\ProductStock;
@@ -9,7 +10,6 @@ use App\Models\ReceiveProduct;
 use App\Models\Supplier;
 use App\Services\Status\StatusService;
 use App\Services\Utils\DateFormatter;
-use Carbon\Exceptions\InvalidDateException;
 use Illuminate\Support\Facades\DB;
 
 class ReceiveProductService
@@ -64,7 +64,7 @@ class ReceiveProductService
         $pluckStockProductId = $stockList->pluck('product_id', 'id');
 
         if ($stockList->isEmpty()) {
-            throw new InvalidDateException('Mahsulotlar uchun zaxira polka ochilmagan. Admin zaxira polka yaratishi kerak');
+            throw new InvalidDataException('Mahsulotlar uchun zaxira polka ochilmagan. Admin zaxira polka yaratishi kerak');
         }
 
         // Products
@@ -82,12 +82,12 @@ class ReceiveProductService
                     $stockName = $pluckStockName[$item['polka_id']];
                     $productName = $pluckProductsName[$item['product_id']];
 
-                    throw new InvalidDateException("`$productName` mahsulot uchun `$stockName` nomli polka tegishli emas. Polkani to'g'ri tanlang");
+                    throw new InvalidDataException("`$productName` mahsulot uchun `$stockName` nomli polka tegishli emas. Polkani to'g'ri tanlang");
                 }
 
                 if (!isset($pluckStockAmount[$item['polka_id']])) {
                     $productName = $pluckProductsName[$item['product_id']];
-                    throw new InvalidDateException("`$productName` mahsulot uchun zaxira polka ochilmagan. Adminka zaxira polka yaratishi kerak");
+                    throw new InvalidDataException("`$productName` mahsulot uchun zaxira polka ochilmagan. Adminka zaxira polka yaratishi kerak");
                 }
 
                 // Check match stock product_id with request product_id
@@ -95,10 +95,10 @@ class ReceiveProductService
                     $stockName = $pluckStockName[$item['polka_id']];
                     $productName = $pluckProductsName[$item['product_id']];
 
-                    throw new InvalidDateException("`$stockName` polka `$productName` mahsulotga tegishli emas!");
+                    throw new InvalidDataException("`$stockName` polka `$productName` mahsulotga tegishli emas!");
                 }
             } else {
-                throw new InvalidDateException("Polka topilmadi");
+                throw new InvalidDataException("Polka topilmadi");
             }
         }
 
