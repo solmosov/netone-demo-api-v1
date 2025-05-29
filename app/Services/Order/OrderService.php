@@ -343,8 +343,8 @@ class OrderService
                 // Set Completed Amount
                 $orderItem->completed_amount = $completedAmount;
                 $orderItem->stock_id = $stockId;
-                $orderItemId->sum_sale_price = $sumSalePrice;
-                $orderItemId->sum_cost_price = $sumCostPrice;
+                $orderItem->sum_sale_price = $sumSalePrice;
+                $orderItem->sum_cost_price = $sumCostPrice;
                 $orderItem->save();
 
                 // Decrement form stock
