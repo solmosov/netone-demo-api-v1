@@ -22,39 +22,39 @@ class ProducerDashboardService
 
     private function todaySales()
     {
-        $todayAmount = (float) DB::table("completed_orders")
+        $totalSalePrice = (float) DB::table("completed_orders")
             ->selectRaw('SUM(total_sale_price) as total_sale_price')
             ->whereDate('updated_at', today())
             ->value('total_sale_price');
 
-        $todayCostAmount = (float) DB::table("completed_orders")
+        $totalCostPrice = (float) DB::table("completed_orders")
             ->selectRaw('SUM(total_cost_price) as total_cost_price')
             ->whereDate('updated_at', today())
             ->value('total_cost_price');
 
-        $yesterdayAmount = (float) DB::table("completed_orders")
+        $yesterdaySalePrice = (float) DB::table("completed_orders")
             ->selectRaw('SUM(total_sale_price) as total_sale_price')
             ->whereDate('updated_at', Carbon::yesterday())
             ->value('total_sale_price');
 
-        $diffAmount = $todayAmount - $yesterdayAmount;
+        $todayAndYesterdayDiff = $totalSalePrice - $yesterdaySalePrice;
 
         $diffPercent = 100;
-        if ($yesterdayAmount != 0) {
-            $diffPercent = ($todayAmount ?? 1) * 100 / $yesterdayAmount - 100;
-        }else if($todayAmount == 0){
+        if ($yesterdaySalePrice != 0) {
+            $diffPercent = ($totalSalePrice ?? 1) * 100 / $yesterdaySalePrice - 100;
+        }else if($totalSalePrice == 0){
             $diffPercent = 0;
         }
 
 
         return [
-            'yesterday_amount' => $yesterdayAmount,
-            "today_amount" => $todayAmount,
+            'yesterday_amount' => $yesterdaySalePrice,
+            "today_amount" => $totalSalePrice,
 
-            "today_profit" => $todayAmount - $todayCostAmount,
-            "today_cost_amount" => $todayCostAmount,
+            "today_profit" => $totalSalePrice - $totalCostPrice,
+            "today_cost_amount" => $totalCostPrice,
             
-            "diff_amount" => $diffAmount,
+            "diff_amount" => $todayAndYesterdayDiff,
             "diff_percent" => $diffPercent,
         ];
     }
