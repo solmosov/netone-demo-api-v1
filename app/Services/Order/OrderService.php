@@ -317,6 +317,8 @@ class OrderService
 
                 // Order
                 $orderItem = OrderDetail::where('order_id', $reqOrderId)->findOrFail($orderItemId);
+                $orderItemSalePrice = $orderItem->sale_price;
+                $orderItemCostPrice = $orderItem->cost_price;
 
                 // Stock
                 $stockItem = ProductStock::with('product')->findOrFail($stockId);
@@ -334,18 +336,15 @@ class OrderService
                     throw new InvalidDataException("$stockItem->name zaxira polkada zaxira yetarli emas");
                 }
 
-
-                // Product Price
-                $salePrice = $orderItem->sale_price;
-                $costPrice = $orderItem->cost_price;
-
                 // Sum Price
-                $sumSalePrice = $salePrice * $completedAmount;
-                $sumCostPrice = $costPrice * $completedAmount;
+                $sumSalePrice = $orderItemSalePrice * $completedAmount;
+                $sumCostPrice = $orderItemCostPrice * $completedAmount;
 
                 // Set Completed Amount
                 $orderItem->completed_amount = $completedAmount;
                 $orderItem->stock_id = $stockId;
+                $orderItem->sum_sale_price = $sumSalePrice;
+                $orderItem->sum_cost_price = $sumCostPrice;
                 $orderItem->save();
 
                 // Decrement form stock
