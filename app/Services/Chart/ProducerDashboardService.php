@@ -22,9 +22,11 @@ class ProducerDashboardService
         $weeklyProfit = $this->getWeeklyProfit();
 
         return [
-            "weekly_sales" => $weeklySales,
-            "weekly_profit" => $weeklyProfit,
-            "weekly_days" => $this->getWeekDays(),
+            "weekly" => [
+                "weekly_sales" => $weeklySales,
+                "weekly_profit" => $weeklyProfit,
+                "weekly_days" => $this->getWeekDays()
+            ],
         ];
     }
 
