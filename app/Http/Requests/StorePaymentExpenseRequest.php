@@ -2,8 +2,11 @@
 
 namespace App\Http\Requests;
 
-use App\Rules\WalletBelongsToUser;
+use App\Exceptions\InvalidDataException;
+use App\Models\UserWallet;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Validator;
 
 class StorePaymentExpenseRequest extends FormRequest
 {
@@ -27,8 +30,8 @@ class StorePaymentExpenseRequest extends FormRequest
             'wallet_id' => [
                 'required',
                 'integer',
-                'exists:user_wallet,wallet_id,user_id,'.auth()->id(),
-//                Rule::exists('user_wallet', 'wallet_id')->where('user_id', auth()->id()),
+                'exists:user_wallet,wallet_id,user_id,' . Auth::id(),
+                //                Rule::exists('user_wallet', 'wallet_id')->where('user_id', auth()->id()),
             ],
             'amount' => 'required|numeric|min:0',
             'rate_amount' => 'required|numeric|min:1',
@@ -38,10 +41,29 @@ class StorePaymentExpenseRequest extends FormRequest
 
     public function messages(): array
     {
-        $userName = auth()->user()->name;
+        $userName = Auth::user()->name;
 
         return [
             'wallet_id.exists' => "Xurmatli $userName foydalanuvchi, sizda mavjud bo'lmagan hisobni tanlayapsiz!"
         ];
+    }
+
+    public function withValidator(Validator $validator)
+    {
+        $validator->after(function ($validator) {
+            $authUser = Auth::user();
+            $walletId = $this->input('wallet_id');
+            $amount  = $this->input('amount');
+
+            // User Wallet
+            $userWallet = UserWallet::with(['wallet'])
+                ->where('user_id', $authUser->id)
+                ->where('wallet_id', $walletId)
+                ->firstOrFail();
+
+            if ($userWallet->amount < $amount) {
+                throw new InvalidDataException("{$userWallet->wallet->name} -  hisobingizda mablag' yetarli emas! Hisobingizni tekshiring");
+            }
+        });
     }
 }
