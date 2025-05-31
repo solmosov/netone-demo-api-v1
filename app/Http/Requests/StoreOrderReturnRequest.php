@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests;
 
+use App\Models\ProductStock;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 class StoreOrderReturnRequest extends FormRequest
 {
@@ -24,5 +26,25 @@ class StoreOrderReturnRequest extends FormRequest
             'product_list.*.amount_type_id' => 'required|integer|exists:amount_types,id',
             'comment' => 'nullable|string'
         ];
+    }
+
+    public function withValidator(Validator $validator)
+    {
+        $validator->after(function ($validator) {
+            $productList = $this->input('product_list');
+
+            foreach ($productList as $key => $item) {
+                $productId = $item['product_id'];
+                $polkaId = $item['polka_id'];
+                $amountTypeId = $item['amount_type_id'];
+
+                // Product Stock
+                $productStock = ProductStock::where('product_id', $productId)
+                    ->findOrFail($polkaId);
+                if ($productStock->amount_type_id !== $amountTypeId) {
+                    $validator->errors()->add("product_list.{$key}.amount_type_id", "O'lchov birligi noto'g'ri tanlandi");
+                }
+            }
+        });
     }
 }
