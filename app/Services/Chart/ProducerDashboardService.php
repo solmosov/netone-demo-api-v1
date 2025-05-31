@@ -54,16 +54,14 @@ class ProducerDashboardService
 
     private function getWeeklyExpense()
     {
-        return DB::table('payments')
+        $data =  DB::table('payments')
             ->leftJoin('payment_wallet', 'payments.id', '=', 'payment_wallet.payment_id')
-            ->selectRaw('DATE(payments.created_at) as day, SUM(payment_wallet.sum_price) as daily_amount')
-            ->where('payments.paymentable_type', 'App\Models\Expense')
+            ->selectRaw('DATE(payments.created_at) as date, SUM(payment_wallet.sum_price) as sum_sale_price')
             ->whereBetween('payments.created_at', $this->weeklyInterval)
-            ->groupBy('day')
-            ->orderBy('day', 'asc')
-            ->get()
-            ->map(fn($day) => (float)$day->daily_amount)
-            ->toArray();
+            ->groupBy('date')
+            ->get();
+
+        return $this->generateWeeklyData($data);
     }
 
     public function getWeeklyRentalIncome()
