@@ -4,6 +4,7 @@ namespace App\Services\Chart;
 
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class ProducerDashboardService
@@ -11,8 +12,9 @@ class ProducerDashboardService
 
     private $weeklyInterval =  [];
 
-    public function __construct()
-    {
+    public function __construct(
+        protected $authUser = Auth::user(),
+    ) {
         $this->weeklyInterval = $this->getInterval();
     }
 
@@ -34,6 +36,7 @@ class ProducerDashboardService
     {
         $data = DB::table('completed_orders')
             ->selectRaw('DATE(updated_at) as date, SUM(total_sale_price) as sum_sale_price')
+            ->where('user_id', $this->authUser->id)
             ->whereBetween('updated_at', $this->weeklyInterval)
             ->groupBy('date')
             ->get();
@@ -45,6 +48,7 @@ class ProducerDashboardService
     {
         $data = DB::table('order_returns')
             ->selectRaw('DATE(created_at) as date, SUM(total_sale_price) as sum_sale_price')
+            ->where('user_id', $this->authUser->id)
             ->whereBetween('created_at', $this->weeklyInterval)
             ->groupBy('date')
             ->get();
@@ -57,6 +61,8 @@ class ProducerDashboardService
         $data =  DB::table('payments')
             ->leftJoin('payment_wallet', 'payments.id', '=', 'payment_wallet.payment_id')
             ->selectRaw('DATE(payments.created_at) as date, SUM(payment_wallet.sum_price) as sum_sale_price')
+            ->where('payments.paymentable_type', 'App\Models\Expense')
+            ->where('user_id', $this->authUser->id)
             ->whereBetween('payments.created_at', $this->weeklyInterval)
             ->groupBy('date')
             ->get();
@@ -66,16 +72,16 @@ class ProducerDashboardService
 
     public function getWeeklyRentalIncome()
     {
-        return DB::table('payments')
+        $data = DB::table('payments')
             ->leftJoin('payment_wallet', 'payments.id', '=', 'payment_wallet.payment_id')
-            ->selectRaw('DATE(payments.created_at) as day, SUM(payment_wallet.sum_price) as daily_amount')
+            ->selectRaw('DATE(payments.created_at) as date, SUM(payment_wallet.sum_price) as sum_sale_price')
             ->where('payments.paymentable_type', 'App\Models\RentalPropertyAction')
+            ->where('user_id', $this->authUser->id)
             ->whereBetween('payments.created_at', $this->weeklyInterval)
-            ->groupBy('day')
-            ->orderBy('day', 'asc')
-            ->get()
-            ->map(fn($day) => (float) $day->daily_amount)
-            ->toArray();
+            ->groupBy('date')
+            ->get();
+
+        return $this->generateWeeklyData($data);
     }
 
 
