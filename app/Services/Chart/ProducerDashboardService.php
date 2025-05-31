@@ -44,8 +44,8 @@ class ProducerDashboardService
     private function getWeeklyReturn()
     {
         $data = DB::table('order_returns')
-            ->selectRaw('DATE(updated_at) as date, SUM(total_sale_price) as sum_sale_price')
-            ->whereBetween('updated_at', $this->weeklyInterval)
+            ->selectRaw('DATE(created_at) as date, SUM(total_sale_price) as sum_sale_price')
+            ->whereBetween('created_at', $this->weeklyInterval)
             ->groupBy('date')
             ->get();
 
