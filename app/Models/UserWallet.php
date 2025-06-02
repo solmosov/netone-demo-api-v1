@@ -10,7 +10,7 @@ class UserWallet extends Model
 {
     protected $table = 'user_wallet';
 
-    protected $fillable = ['user_id', 'wallet_id'];
+    protected $fillable = ['user_id', 'wallet_id', 'amount'];
 
     public function user(): BelongsTo
     {

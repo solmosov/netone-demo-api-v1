@@ -3,110 +3,170 @@
 namespace App\Services\Chart;
 
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class ProducerDashboardService
 {
+
+    private $weeklyInterval =  [];
+    protected $authUser;
+    public function __construct()
+    {
+        $this->authUser = Auth::user();
+        $this->weeklyInterval = $this->getInterval();
+    }
+
     public function get()
     {
-        $todaySales = $this->todaySales();
-        $todayExpense = $this->todayExpense();
-        $todayIncome = $this->todayIncome($todaySales, $todayExpense);
+        $weeklySales = $this->getWeeklySales('total_sale_price');
+        $weeklyExpense = $this->getWeeklyExpense();
+        $weeklyProfit = $this->getWeeklyProfit();
 
         return [
-            "sales" => $todaySales,
-            "expense" => $todayExpense,
-            "income" => $todayIncome,
+            "weekly" => [
+                "weekly_sales" => $weeklySales,
+                "weekly_cost" => $weeklySales,
+                "weekly_expense" => $weeklyExpense,
+                "weekly_profit" => $weeklyProfit,
+                "weekly_days" => $this->getWeekDays()
+            ],
         ];
     }
 
-    private function todaySales()
+    private function getWeeklySales(string $column)
     {
-        $todayAmount = (float) DB::table("completed_orders")
-            ->selectRaw('SUM(total_sale_price) as total_sale_price')
-            ->whereDate('updated_at', today())
-            ->value('total_sale_price');
+        $data = DB::table('completed_orders')
+            ->selectRaw("DATE(updated_at) as date, SUM({$column}) as amount")
+            ->where('user_id', $this->authUser->id)
+            ->whereBetween('updated_at', $this->weeklyInterval)
+            ->groupBy('date')
+            ->get();
 
-        $todayCostAmount = (float) DB::table("completed_orders")
-            ->selectRaw('SUM(total_cost_price) as total_cost_price')
-            ->whereDate('updated_at', today())
-            ->value('total_cost_price');
+        return $this->generateWeeklyData($data);
+    }
 
-        $yesterdayAmount = (float) DB::table("completed_orders")
-            ->selectRaw('SUM(total_sale_price) as total_sale_price')
-            ->whereDate('updated_at', Carbon::yesterday())
-            ->value('total_sale_price');
+    private function getWeeklyReturn(string $column)
+    {
+        $data = DB::table('order_returns')
+            ->selectRaw("DATE(created_at) as date, SUM({$column}) as amount")
+            ->where('user_id', $this->authUser->id)
+            ->whereBetween('created_at', $this->weeklyInterval)
+            ->groupBy('date')
+            ->get();
 
-        $diffAmount = $todayAmount - $yesterdayAmount;
+        return $this->generateWeeklyData($data);
+    }
 
-        $diffPercent = 100;
-        if ($yesterdayAmount != 0) {
-            $diffPercent = ($todayAmount ?? 1) * 100 / $yesterdayAmount - 100;
-        }else if($todayAmount == 0){
-            $diffPercent = 0;
+    private function getWeeklyExpense()
+    {
+        $data =  DB::table('payments')
+            ->leftJoin('payment_wallet', 'payments.id', '=', 'payment_wallet.payment_id')
+            ->selectRaw('DATE(payments.created_at) as date, SUM(payment_wallet.sum_price) as amount')
+            ->where('payments.paymentable_type', 'App\Models\Expense')
+            ->where('user_id', $this->authUser->id)
+            ->whereBetween('payments.created_at', $this->weeklyInterval)
+            ->groupBy('date')
+            ->get();
+
+        return $this->generateWeeklyData($data);
+    }
+
+    public function getWeeklyRental(bool $isIncome)
+    {
+        $data = DB::table('payments')
+            ->leftJoin('payment_wallet', 'payments.id', '=', 'payment_wallet.payment_id')
+            ->leftJoin('rental_property_actions', 'payments.paymentable_id', '=', 'rental_property_actions.id')
+            ->selectRaw('DATE(payments.created_at) as date, SUM(payment_wallet.sum_price) as amount')
+            ->where('rental_property_actions.is_income', '=', $isIncome)
+            ->where('payments.paymentable_type', 'App\Models\RentalPropertyAction')
+            ->where('user_id', $this->authUser->id)
+            ->whereBetween('payments.created_at', $this->weeklyInterval)
+            ->groupBy('date')
+            ->get();
+        return $this->generateWeeklyData($data);
+    }
+
+
+    /* 
+        1. Sale Price
+        2. Cost Price
+        2. Return Sale Price
+        3. Return Cost Price
+        4. Expense
+        5. Rental Property Income
+        6. Rental Property Expense
+    */
+
+    private function getWeeklyProfit()
+    {
+        $weeklySalesSalePrice = $this->getWeeklySales('total_sale_price');
+        $weeklySalesCostPrice = $this->getWeeklySales('total_cost_price');
+        $weeklyReturnSalePrice = $this->getWeeklyReturn('total_sale_price');
+        $weeklyReturnCostPrice = $this->getWeeklyReturn('total_cost_price');
+        $weeklyExpense = $this->getWeeklyExpense();
+        $weeklyRentalIncome = $this->getWeeklyRental(true);
+        $weeklyRentalExpense = $this->getWeeklyRental(false);
+        $weekDaysCount = count($this->getWeekDays());
+
+        $data = [];
+        for ($i = 0; $i < $weekDaysCount; $i++) {
+            // Sales
+            $salePrice = $weeklySalesSalePrice[$i] ?? 0;
+            $costPrice = $weeklySalesCostPrice[$i] ?? 0;
+            // Return
+            $returnSalePrice = $weeklyReturnSalePrice[$i] ?? 0;
+            $returnCostPrice = $weeklyReturnCostPrice[$i] ?? 0;
+            // Expense
+            $expense = $weeklyExpense[$i] ?? 0;
+
+            // Rental Property
+            $rentalIncome = $weeklyRentalIncome[$i] ?? 0;
+            $rentalExpense = $weeklyRentalExpense[$i] ?? 0;
+
+            // Sales Profit
+            $salesProfit = $salePrice - $costPrice;
+            $returnProfit = $returnSalePrice - $returnCostPrice;
+
+            // Rental Profit
+            $rentalProfit = $rentalIncome - $rentalExpense;
+
+            $data[] =  $salesProfit - $returnProfit - $expense + $rentalProfit;
         }
 
 
-        return [
-            'yesterday_amount' => $yesterdayAmount,
-            "today_amount" => $todayAmount,
+        return $data;
+    }
 
-            "today_profit" => $todayAmount - $todayCostAmount,
-            "today_cost_amount" => $todayCostAmount,
-            
-            "diff_amount" => $diffAmount,
-            "diff_percent" => $diffPercent,
+    private function getWeekDays()
+    {
+        return ["Du", "Se", "Cho", "Pa", "Ju", "Sha", "Ya"];
+    }
+
+    private function getInterval()
+    {
+        return [
+            Carbon::now()->startOfWeek()->startOfDay(),
+            Carbon::now()->endOfWeek()->endOfDay(),
         ];
     }
 
-    private function todayExpense()
+    private function generateWeeklyData(Collection $data)
     {
-        $todayExpense = DB::table('payments')
-            ->join('payment_wallet', 'payments.id', '=', 'payment_wallet.payment_id')
-            ->select(
-                DB::raw('COUNT(payments.id) as total_count'),
-                DB::raw('SUM(payment_wallet.sum_price) as total_amount'),
-            )
-            ->where('payments.paymentable_type', 'App\Models\Expense')
-            ->whereDate('payments.created_at', today())
-            ->first();
+        $result = [];
 
-        $yesterdayExpense = DB::table('payments')
-            ->join('payment_wallet', 'payments.id', '=', 'payment_wallet.payment_id')
-            ->select(
-                DB::raw('COUNT(payments.id) as total_count'),
-                DB::raw('SUM(payment_wallet.sum_price) as total_amount'),
-            )
-            ->where('payments.paymentable_type', 'App\Models\Expense')
-            ->whereDate('payments.created_at', Carbon::yesterday())
-            ->first();
+        $start = $this->weeklyInterval[0]->copy();
+        for ($i = 0; $i < 7; $i++) {
+            $dateStr = $start->format('Y-m-d');
 
-        // Amounts
-        $todayAmount = (float) $todayExpense->total_amount;
-        $yesterdayAmount = (float) $yesterdayExpense->total_amount;
+            $dayData  = $data->firstWhere('date', $dateStr);
 
-        $diffAmount = $todayAmount - $yesterdayAmount;
-        $diffPercent = 100;
-        if ($yesterdayAmount != 0) {
-            $diffPercent = ($todayAmount ?? 1) * 100 / $yesterdayAmount - 100;
-        }else if($todayAmount == 0){
-            $diffPercent = 0;
+            $result[] = $dayData ? (float) $dayData->amount : 0;
+
+            $start->addDay();
         }
 
-        return [
-            "yesterday_amount" => $yesterdayAmount,
-            "yesterday_count" => $yesterdayExpense->total_count,
-            "today_amount" => $todayAmount,
-            "today_count" => $todayExpense->total_count,
-            "diff_amount" => $diffAmount,
-            "diff_percent" => $diffPercent
-        ];
-    }
-
-    private function todayIncome($todaySales, $todayExpense)
-    {
-        return [
-            "amount" => $todaySales['today_profit'] - $todayExpense['today_amount']
-        ];
+        return $result;
     }
 }
