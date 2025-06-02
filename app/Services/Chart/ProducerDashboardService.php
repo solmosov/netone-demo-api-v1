@@ -11,10 +11,10 @@ class ProducerDashboardService
 {
 
     private $weeklyInterval =  [];
-
-    public function __construct(
-        protected $authUser = Auth::user(),
-    ) {
+    protected $authUser;
+    public function __construct()
+    {
+        $this->authUser = Auth::user();
         $this->weeklyInterval = $this->getInterval();
     }
 
@@ -74,7 +74,10 @@ class ProducerDashboardService
     {
         $data = DB::table('payments')
             ->leftJoin('payment_wallet', 'payments.id', '=', 'payment_wallet.payment_id')
+            ->leftJoin('rental_properties', 'payments.paymentable_id', '=', 'rental_properties.id')
+            ->leftJoin('rental_property_actions', 'rental_properties.id', '=', 'rental_property_actions.rental_property_id')
             ->selectRaw('DATE(payments.created_at) as date, SUM(payment_wallet.sum_price) as sum_sale_price')
+            // ->where('rental_property_actions.is_income', '=', true)
             ->where('payments.paymentable_type', 'App\Models\RentalPropertyAction')
             ->where('user_id', $this->authUser->id)
             ->whereBetween('payments.created_at', $this->weeklyInterval)
